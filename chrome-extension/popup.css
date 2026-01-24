@@ -198,6 +198,63 @@ textarea:focus {
   color: #333;
 }
 
+.intent-summary {
+  background: #e8f4f8;
+  border-left: 3px solid #17a2b8;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.intent-summary h4 {
+  margin-bottom: 8px;
+  color: #0c5460;
+  font-size: 13px;
+}
+
+.intent-summary ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.intent-summary li {
+  margin-bottom: 4px;
+  color: #0c5460;
+}
+
+.questions-section {
+  background: #f0f8ff;
+  border-left: 3px solid #667eea;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.questions-section h4 {
+  margin-bottom: 8px;
+  color: #4a5568;
+  font-size: 13px;
+}
+
+.questions-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.questions-section li {
+  margin-bottom: 6px;
+  color: #4a5568;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.questions-section li:hover {
+  color: #667eea;
+  font-weight: 500;
+}
+
 .alternatives {
   margin-bottom: 16px;
 }

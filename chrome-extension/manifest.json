@@ -12,7 +12,8 @@
   ],
   "host_permissions": [
     "https://mail.google.com/*",
-    "http://localhost:8080/*"
+    "http://localhost:8080/*",
+    "http://localhost/*"
   ],
   "action": {
     "default_popup": "popup.html"
@@ -26,5 +27,8 @@
       "js": ["content-script.js"],
       "css": ["content-style.css"]
     }
-  ]
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://localhost:8080 http://localhost:* 'self'"
+  }
 }

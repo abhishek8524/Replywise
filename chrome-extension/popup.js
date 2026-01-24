@@ -58,40 +58,52 @@ async function generateReply() {
   try {
     const payload = {
       emailText,
-      context: context || undefined
+      context: context || undefined,
+      tone: selectedTone
     };
     
-    console.log('Sending to API:', API_URL + '/generate', payload);
+    console.log('Sending to background service worker:', payload);
     
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-    
-    const response = await fetch(`${API_URL}/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    // Use chrome.runtime.sendMessage to communicate with background service worker
+    // This is the proper way for Manifest V3 extensions
+    chrome.runtime.sendMessage(
+      {
+        type: 'GENERATE_REPLY',
+        data: payload
       },
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeout);
-    console.log('Response received:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API error response:', errorText);
-      throw new Error(`API error: ${response.status} - ${errorText}`);
-    }
-
-    const data = await response.json();
-    console.log('API success:', data);
-    
-    currentReply = data.reply || 'No reply generated';
-    currentRiskAnalysis = data.risk || {};
-    
-    displayResult(data);
-    showResultSection();
+      (response) => {
+        console.log('Response from background:', response);
+        
+        if (chrome.runtime.lastError) {
+          console.error('Chrome runtime error:', chrome.runtime.lastError);
+          showError(`Extension error: ${chrome.runtime.lastError.message}`);
+          return;
+        }
+        
+        if (response.success) {
+          const data = response.data;
+          console.log('API success:', data);
+          
+          // Get the reply based on selected tone
+          const toneMap = {
+            'professional': 'formal',
+            'casual': 'short',
+            'friendly': 'friendly',
+            'formal': 'formal'
+          };
+          const style = toneMap[selectedTone] || 'friendly';
+          const selectedDraft = data.reply_drafts?.find(d => d.style === style) || data.reply_drafts?.[0];
+          currentReply = selectedDraft?.body || 'No reply generated';
+          currentRiskAnalysis = data.risk || {};
+          
+          displayResult(data);
+          showResultSection();
+        } else {
+          console.error('API error:', response.error);
+          showError(`Failed to generate reply: ${response.error}`);
+        }
+      }
+    );
   } catch (error) {
     console.error('API call error:', error.message);
     showError(`Failed to generate reply: ${error.message}`);
@@ -101,14 +113,20 @@ async function generateReply() {
 function displayResult(data) {
   console.log('displayResult called with:', data);
   
-  // Get the main reply - try different field names
-  const reply = data.reply || 
-                (data.reply_drafts && data.reply_drafts[0] && data.reply_drafts[0].body) ||
-                'No reply generated';
-  
-  // Main reply
-  document.getElementById('mainReply').textContent = reply;
-  console.log('Set main reply to:', reply);
+  // Main reply is already set via currentReply
+  document.getElementById('mainReply').textContent = currentReply;
+  console.log('Set main reply to:', currentReply);
+
+  // Intent Summary
+  const intentList = document.getElementById('intentList');
+  intentList.innerHTML = '';
+  if (data.intent_summary && data.intent_summary.length > 0) {
+    data.intent_summary.forEach(intent => {
+      const li = document.createElement('li');
+      li.textContent = intent;
+      intentList.appendChild(li);
+    });
+  }
 
   // Risk badge
   const riskBadge = document.getElementById('riskBadge');
@@ -119,8 +137,15 @@ function displayResult(data) {
   // Risk flags
   const riskFlags = document.getElementById('riskFlags');
   riskFlags.innerHTML = '';
-  if (data.risk?.flags && Array.isArray(data.risk.flags)) {
-    data.risk.flags.forEach(flag => {
+  if (data.risk?.flags) {
+    // Handle both array format and object format
+    const flagsArray = Array.isArray(data.risk.flags) 
+      ? data.risk.flags 
+      : Object.entries(data.risk.flags)
+          .filter(([key, value]) => value === true)
+          .map(([key]) => key);
+    
+    flagsArray.forEach(flag => {
       const span = document.createElement('span');
       span.className = 'risk-flag';
       span.textContent = flag;
@@ -133,25 +158,55 @@ function displayResult(data) {
   const notesText = Array.isArray(riskNotes) ? riskNotes.join(' ') : riskNotes;
   document.getElementById('riskNotes').textContent = notesText || 'No issues detected';
 
-  // Alternatives - use reply_drafts if available
+  // Alternatives - show other reply_drafts
   const alternativesList = document.getElementById('alternativesList');
   alternativesList.innerHTML = '';
-  const alternatives = data.alternatives || 
-                       (data.reply_drafts && data.reply_drafts.map(d => d.body)) || 
-                       [];
   
-  if (alternatives && alternatives.length > 0) {
-    alternatives.forEach((alt, index) => {
-      if (alt) {
+  if (data.reply_drafts && data.reply_drafts.length > 0) {
+    data.reply_drafts.forEach((draft) => {
+      // Skip the currently displayed draft
+      if (draft.body !== currentReply && draft.body) {
         const div = document.createElement('div');
         div.className = 'alternative-item';
-        div.textContent = alt;
+        
+        // Add a label for the style
+        const label = document.createElement('strong');
+        label.textContent = draft.style.charAt(0).toUpperCase() + draft.style.slice(1) + ': ';
+        label.style.color = '#667eea';
+        
+        const text = document.createTextNode(draft.body);
+        div.appendChild(label);
+        div.appendChild(text);
+        
         div.addEventListener('click', () => {
-          currentReply = alt;
-          document.getElementById('mainReply').textContent = alt;
+          currentReply = draft.body;
+          document.getElementById('mainReply').textContent = draft.body;
+          // Refresh alternatives to update which one is selected
+          displayResult(data);
         });
         alternativesList.appendChild(div);
       }
+    });
+  }
+  
+  // Questions to Ask
+  const questionsList = document.getElementById('questionsList');
+  questionsList.innerHTML = '';
+  if (data.questions_to_ask && data.questions_to_ask.length > 0) {
+    data.questions_to_ask.forEach(question => {
+      const li = document.createElement('li');
+      li.textContent = question;
+      li.title = 'Click to copy';
+      li.addEventListener('click', () => {
+        navigator.clipboard.writeText(question).then(() => {
+          const originalText = li.textContent;
+          li.textContent = '✓ Copied!';
+          setTimeout(() => {
+            li.textContent = originalText;
+          }, 1500);
+        });
+      });
+      questionsList.appendChild(li);
     });
   }
   
