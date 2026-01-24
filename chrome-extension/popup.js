@@ -51,40 +51,64 @@ async function generateReply() {
     return;
   }
 
+  console.log('Generate button clicked');
   showLoadingSection();
+  console.log('Loading section shown');
 
   try {
+    const payload = {
+      emailText,
+      context: context || undefined
+    };
+    
+    console.log('Sending to API:', API_URL + '/generate', payload);
+    
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    
     const response = await fetch(`${API_URL}/generate`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        emailText,
-        context: context || undefined,
-        tone: selectedTone
-      })
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
 
+    clearTimeout(timeout);
+    console.log('Response received:', response.status);
+
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errorText = await response.text();
+      console.error('API error response:', errorText);
+      throw new Error(`API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
+    console.log('API success:', data);
     
-    currentReply = data.reply;
-    currentRiskAnalysis = data.risk;
+    currentReply = data.reply || 'No reply generated';
+    currentRiskAnalysis = data.risk || {};
     
     displayResult(data);
     showResultSection();
   } catch (error) {
+    console.error('API call error:', error.message);
     showError(`Failed to generate reply: ${error.message}`);
   }
 }
 
 function displayResult(data) {
+  console.log('displayResult called with:', data);
+  
+  // Get the main reply - try different field names
+  const reply = data.reply || 
+                (data.reply_drafts && data.reply_drafts[0] && data.reply_drafts[0].body) ||
+                'No reply generated';
+  
   // Main reply
-  document.getElementById('mainReply').textContent = data.reply;
+  document.getElementById('mainReply').textContent = reply;
+  console.log('Set main reply to:', reply);
 
   // Risk badge
   const riskBadge = document.getElementById('riskBadge');
@@ -105,23 +129,33 @@ function displayResult(data) {
   }
 
   // Risk notes
-  document.getElementById('riskNotes').textContent = data.risk?.notes?.join(' ') || 'No issues detected';
+  const riskNotes = data.risk?.notes || [];
+  const notesText = Array.isArray(riskNotes) ? riskNotes.join(' ') : riskNotes;
+  document.getElementById('riskNotes').textContent = notesText || 'No issues detected';
 
-  // Alternatives
+  // Alternatives - use reply_drafts if available
   const alternativesList = document.getElementById('alternativesList');
   alternativesList.innerHTML = '';
-  if (data.alternatives && data.alternatives.length > 0) {
-    data.alternatives.forEach((alt, index) => {
-      const div = document.createElement('div');
-      div.className = 'alternative-item';
-      div.textContent = alt;
-      div.addEventListener('click', () => {
-        currentReply = alt;
-        document.getElementById('mainReply').textContent = alt;
-      });
-      alternativesList.appendChild(div);
+  const alternatives = data.alternatives || 
+                       (data.reply_drafts && data.reply_drafts.map(d => d.body)) || 
+                       [];
+  
+  if (alternatives && alternatives.length > 0) {
+    alternatives.forEach((alt, index) => {
+      if (alt) {
+        const div = document.createElement('div');
+        div.className = 'alternative-item';
+        div.textContent = alt;
+        div.addEventListener('click', () => {
+          currentReply = alt;
+          document.getElementById('mainReply').textContent = alt;
+        });
+        alternativesList.appendChild(div);
+      }
     });
   }
+  
+  console.log('displayResult finished');
 }
 
 function copyReply() {
