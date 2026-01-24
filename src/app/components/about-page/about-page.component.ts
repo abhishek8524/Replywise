@@ -26,12 +26,12 @@ export class AboutPageComponent {
     },
     {
       name: 'Gamze Esen Erdemir',
-      role: '@ OntarioTechUni',
+      role: '@ OntarioTechUniversity',
       linkedin: 'https://www.linkedin.com/in/gamze-esen-erdemir/'
     },
     {
       name: 'Oluwanifemi',
-      role: '@ OntarioTechUni',
+      role: '@ OntarioTechUniversity',
       linkedin: 'https://www.linkedin.com/in/nifemi-toluhi/'
     }
   ];
