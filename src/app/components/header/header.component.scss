@@ -78,6 +78,67 @@
   }
 }
 
+.api-status {
+  display: flex;
+  align-items: center;
+  
+  .status-badge {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: white;
+      
+      &.spinning {
+        animation: spin 1s linear infinite;
+      }
+    }
+  }
+  
+  &.status-online .status-badge {
+    background-color: #4caf50;
+    box-shadow: 0 2px 8px rgba(76, 175, 80, 0.4);
+    
+    &:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.6);
+    }
+  }
+  
+  &.status-offline .status-badge {
+    background-color: #f44336;
+    box-shadow: 0 2px 8px rgba(244, 67, 54, 0.4);
+    
+    &:hover {
+      transform: scale(1.1);
+      box-shadow: 0 4px 12px rgba(244, 67, 54, 0.6);
+    }
+  }
+  
+  &.status-checking .status-badge {
+    background-color: rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    
+    &:hover {
+      transform: scale(1.1);
+    }
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .demo-toggle {
   display: flex;
   align-items: center;

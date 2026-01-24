@@ -19,6 +19,12 @@
         <span>Responsible AI</span>
       </div>
       
+      <div class="api-status" [class]="'status-' + apiStatus()" [matTooltip]="getStatusText()" matTooltipPosition="below">
+        <div class="status-badge">
+          <mat-icon [class.spinning]="apiStatus() === 'checking'">{{ getStatusIcon() }}</mat-icon>
+        </div>
+      </div>
+      
       <div class="demo-toggle">
         <mat-slide-toggle
           [checked]="demoMode()"
