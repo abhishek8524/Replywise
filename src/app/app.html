@@ -74,4 +74,11 @@
       }
     </div>
   </main>
+
+  <app-footer (showAbout)="showAboutPage.set(true)"></app-footer>
+  
+  <app-about-page 
+    [visible]="showAboutPage()"
+    (close)="showAboutPage.set(false)">
+  </app-about-page>
 </div>

@@ -7,6 +7,8 @@ import { RiskPanelComponent } from './components/risk-panel/risk-panel.component
 import { ReplyDraftsComponent } from './components/reply-drafts/reply-drafts.component';
 import { QuestionsCardComponent } from './components/questions-card/questions-card.component';
 import { ApprovalBarComponent } from './components/approval-bar/approval-bar.component';
+import { FooterComponent } from './components/footer/footer.component';
+import { AboutPageComponent } from './components/about-page/about-page.component';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -26,6 +28,8 @@ import { fadeIn, slideIn } from './app.animations';
     ReplyDraftsComponent,
     QuestionsCardComponent,
     ApprovalBarComponent,
+    FooterComponent,
+    AboutPageComponent,
     MatProgressBarModule,
     MatCardModule,
     MatSnackBarModule
@@ -42,6 +46,7 @@ export class App {
   generateResponse = signal<GenerateResponse | null>(null);
   selectedDraftIndex = signal<number>(0);
   toEmail = signal<string>('');
+  showAboutPage = signal<boolean>(false);
 
   // Computed
   hasResults = computed(() => this.generateResponse() !== null);
