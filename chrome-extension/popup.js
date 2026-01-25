@@ -97,6 +97,7 @@ async function generateReply() {
           currentRiskAnalysis = data.risk || {};
           
           displayResult(data);
+          console.log('displayResult complete, calling showResultSection');
           showResultSection();
         } else {
           console.error('API error:', response.error);
@@ -229,47 +230,51 @@ function showShareSection() {
   document.getElementById('shareMessage').value = '';
   hideAllSections();
   shareSection.classList.add('active');
-  shareSection.style.display = 'block';
+  setTimeout(() => {
+    document.getElementById('shareEmail').focus();
+  }, 100);
 }
 
 function showEditSection() {
   document.getElementById('editText').value = currentReply;
   hideAllSections();
   editSection.classList.add('active');
-  editSection.style.display = 'block';
+  setTimeout(() => {
+    document.getElementById('editText').focus();
+  }, 100);
 }
 
 function showFormSection() {
   hideAllSections();
-  formSection.style.display = 'block';
+  formSection.classList.add('active');
 }
 
 function showResultSection() {
+  console.log('showResultSection called');
   hideAllSections();
+  console.log('Sections hidden');
   resultSection.classList.add('active');
-  resultSection.style.display = 'block';
+  console.log('Result section displayed');
 }
 
 function showLoadingSection() {
   hideAllSections();
   loadingSection.classList.add('active');
-  loadingSection.style.display = 'block';
 }
 
 function showError(message) {
   document.getElementById('errorMessage').textContent = message;
   hideAllSections();
   errorSection.classList.add('active');
-  errorSection.style.display = 'block';
 }
 
 function hideAllSections() {
-  formSection.style.display = 'none';
-  loadingSection.style.display = 'none';
-  resultSection.style.display = 'none';
-  shareSection.style.display = 'none';
-  editSection.style.display = 'none';
-  errorSection.style.display = 'none';
+  formSection.classList.remove('active');
+  loadingSection.classList.remove('active');
+  resultSection.classList.remove('active');
+  shareSection.classList.remove('active');
+  editSection.classList.remove('active');
+  errorSection.classList.remove('active');
 }
 
 function sendForReview() {

@@ -12,9 +12,12 @@ body {
 
 .popup-container {
   width: 500px;
+  min-height: 400px;
   max-height: 700px;
-  overflow-y: auto;
   background: #f8f9fa;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .header {
@@ -22,6 +25,7 @@ body {
   color: white;
   padding: 20px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .header h1 {
@@ -36,12 +40,18 @@ body {
 
 .section {
   padding: 20px;
+  overflow-y: auto;
+  flex: 1;
   display: none;
 }
 
-.section.active,
-#form-section {
-  display: block;
+.section.active {
+  display: flex;
+  flex-direction: column;
+}
+
+.hidden {
+  display: none !important;
 }
 
 .form-group {
@@ -145,12 +155,18 @@ textarea:focus {
 
 #loading-section {
   text-align: center;
+  display: flex !important;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   padding: 40px 20px;
+  min-height: 200px;
 }
 
 #loading-section p {
   color: #666;
   font-size: 14px;
+  margin-top: 16px;
 }
 
 .result-header {

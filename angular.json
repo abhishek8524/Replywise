@@ -72,6 +72,49 @@
         },
         "test": {
           "builder": "@angular/build:unit-test"
+        },
+        "build-extension": {
+          "builder": "@angular/build:application",
+          "options": {
+            "outputPath": "dist/extension",
+            "index": "src/extension-popup.html",
+            "browser": "src/extension-main.ts",
+            "tsConfig": "tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "manifest.json",
+                "input": "chrome-extension",
+                "output": "/"
+              },
+              {
+                "glob": "background.js",
+                "input": "chrome-extension",
+                "output": "/"
+              },
+              {
+                "glob": "content-script.js",
+                "input": "chrome-extension",
+                "output": "/"
+              },
+              {
+                "glob": "content-style.css",
+                "input": "chrome-extension",
+                "output": "/"
+              },
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "styles": [
+              "src/styles.scss"
+            ],
+            "optimization": true,
+            "outputHashing": "none",
+            "namedChunks": false
+          }
         }
       }
     }
