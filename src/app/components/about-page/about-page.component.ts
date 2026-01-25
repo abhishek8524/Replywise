@@ -22,21 +22,29 @@ export class AboutPageComponent {
     {
       name: 'Abhishek',
       role: 'CS @ Sheridan',
-      linkedin: 'https://www.linkedin.com/in/abhishek8524/'
+      linkedin: 'https://www.linkedin.com/in/abhishek8524/',
+      profilePic: '/Abhishek.jpeg'
     },
     {
-      name: 'Gamze Esen Erdemir',
+      name: 'Gamze Esen-Erdemir',
       role: '@ OntarioTechUniversity',
-      linkedin: 'https://www.linkedin.com/in/gamze-esen-erdemir/'
+      linkedin: 'https://www.linkedin.com/in/gamze-esen-erdemir/',
+      profilePic: '/Gamze.jpg'
     },
     {
-      name: 'Oluwanifemi',
+      name: 'Nifemi Toluhi',
       role: '@ OntarioTechUniversity',
-      linkedin: 'https://www.linkedin.com/in/nifemi-toluhi/'
+      linkedin: 'https://www.linkedin.com/in/nifemi-toluhi/',
+      profilePic: '/Nifemi.jpeg'
     }
   ];
 
   onClose(): void {
     this.close.emit();
+  }
+
+  onImageError(event: Event): void {
+    const img = event.target as HTMLImageElement;
+    img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMzAiIGN5PSIzMCIgcj0iMzAiIGZpbGw9IiM2NjdlZWEiLz4KPHBhdGggZD0iTTMwIDIwQzI2LjEgMjAgMjMgMjMuMSAyMyAyN0MyMyAzMC45IDI2LjEgMzQgMzAgMzRDMzMuOSAzNCAzNyAzMC45IDM3IDI3QzM3IDIzLjEgMzMuOSAyMCAzMCAyMFoiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPgo=';
   }
 }

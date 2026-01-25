@@ -9,6 +9,7 @@ import { QuestionsCardComponent } from './components/questions-card/questions-ca
 import { ApprovalBarComponent } from './components/approval-bar/approval-bar.component';
 import { FooterComponent } from './components/footer/footer.component';
 import { AboutPageComponent } from './components/about-page/about-page.component';
+import { VoicePanelComponent } from './components/voice-panel/voice-panel.component';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -30,6 +31,7 @@ import { fadeIn, slideIn } from './app.animations';
     ApprovalBarComponent,
     FooterComponent,
     AboutPageComponent,
+    VoicePanelComponent,
     MatProgressBarModule,
     MatCardModule,
     MatSnackBarModule
@@ -186,6 +188,26 @@ export class App {
 
   onApprove(): void {
     // Handled by ApprovalBarComponent
+  }
+
+  onEdit(): void {
+    // Switch to the reply drafts tab to allow editing
+    this.selectedDraftIndex.set(0);
+    // Could also scroll to the drafts section or show a message
+    this.snackBar.open('You can now edit the reply in the drafts section above.', 'Got it', {
+      duration: 3000
+    });
+  }
+
+  onReject(): void {
+    // Reset the results and go back to input
+    this.generateResponse.set(null);
+    this.emailText.set('');
+    this.context.set('');
+    this.selectedDraftIndex.set(0);
+    this.snackBar.open('Reply rejected. You can generate a new response.', 'Got it', {
+      duration: 3000
+    });
   }
 
   onCopy(): void {

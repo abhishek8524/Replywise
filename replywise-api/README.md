@@ -11,9 +11,11 @@ Backend API for ReplyWise - AI-powered email reply assistant using Google Gemini
 
 2. **Configure environment:**
    - Copy `.env.example` to `.env`
-   - Add your Gemini API key:
+   - Add your API keys:
      ```
      GEMINI_API_KEY=your_api_key_here
+     ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
+     ELEVENLABS_VOICE_ID=21m00Tcm4TlvDq8ikWAM
      PORT=8080
      ```
 
@@ -91,15 +93,32 @@ Rewrite an existing draft.
 }
 ```
 
+### POST /api/tts
+
+Convert text to speech using ElevenLabs.
+
+**Request:**
+```json
+{
+  "text": "Text to convert to speech",
+  "voice_id": "optional_voice_id"
+}
+```
+
+**Response:**
+Audio stream with `Content-Type: audio/mpeg`
+
 ## Features
 
 - ✅ Google Gemini AI integration
+- ✅ ElevenLabs Text-to-Speech
 - ✅ Request/response validation with Zod
 - ✅ Security middleware (Helmet, CORS)
 - ✅ Risk analysis heuristics
 - ✅ JSON-only responses with retry logic
 - ✅ TypeScript support
 - ✅ Error handling
+- ✅ Rate limiting for TTS requests
 
 ## Project Structure
 

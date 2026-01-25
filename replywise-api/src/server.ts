@@ -15,6 +15,7 @@ import {
   GenerateResponse,
   RewriteResponse
 } from './schemas';
+import ttsRouter from './routes/tts';
 
 // Load environment variables
 dotenv.config();
@@ -30,6 +31,9 @@ app.use(cors({
 }));
 app.use(express.json());
 
+// Routes
+app.use('/api', ttsRouter);
+
 // Initialize Gemini
 const geminiApiKey = process.env.GEMINI_API_KEY;
 if (!geminiApiKey || geminiApiKey === 'YOUR_KEY_HERE') {
@@ -37,6 +41,14 @@ if (!geminiApiKey || geminiApiKey === 'YOUR_KEY_HERE') {
 } else {
   initializeGemini(geminiApiKey);
   console.log('✅ Gemini initialized');
+}
+
+// Initialize ElevenLabs
+const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
+if (!elevenLabsApiKey || elevenLabsApiKey === 'YOUR_KEY_HERE') {
+  console.warn('⚠️  WARNING: ELEVENLABS_API_KEY not set or using placeholder. TTS will fail.');
+} else {
+  console.log('✅ ElevenLabs initialized');
 }
 
 // Error handling middleware

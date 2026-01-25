@@ -32,7 +32,11 @@
               @for (member of teamMembers; track member.name) {
                 <div class="team-member">
                   <div class="member-avatar">
-                    <mat-icon>account_circle</mat-icon>
+                    <img 
+                      [src]="member.profilePic" 
+                      [alt]="member.name + ' profile picture'"
+                      class="profile-pic"
+                      (error)="onImageError($event)">
                   </div>
                   <div class="member-info">
                     <h4 class="member-name">{{ member.name }}</h4>

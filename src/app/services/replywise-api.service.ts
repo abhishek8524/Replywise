@@ -1,7 +1,7 @@
 import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Observable, of, throwError } from 'rxjs';
-import { catchError, delay } from 'rxjs/operators';
+import { catchError, delay, map } from 'rxjs/operators';
 import { environment } from '../../environments/environment';
 import {
   GenerateRequest,
@@ -177,6 +177,49 @@ Best regards,
         // If demo mode is OFF, throw the error
         console.error('API call failed:', error);
         return throwError(() => error);
+      })
+    );
+  }
+
+  /**
+   * Get audio for reply text using ElevenLabs TTS
+   */
+  getReplyAudio(text: string): Observable<Blob> {
+    if (this.demoMode()) {
+      // Return empty blob for demo mode
+      return of(new Blob()).pipe(delay(500));
+    }
+
+    return this.http.post(
+      `${this.apiBaseUrl}/tts`,
+      { text },
+      { responseType: 'arraybuffer' }
+    ).pipe(
+      map((response: ArrayBuffer) => {
+        // Convert ArrayBuffer to Blob
+        return new Blob([response], { type: 'audio/mpeg' });
+      }),
+      catchError((error: HttpErrorResponse) => {
+        console.error('TTS API call failed:', error);
+        // Try to parse error message from response
+        let errorMessage = 'Failed to load audio';
+        if (error.error) {
+          try {
+            // If error.error is ArrayBuffer, convert to string
+            if (error.error instanceof ArrayBuffer) {
+              const decoder = new TextDecoder('utf-8');
+              const errorText = decoder.decode(error.error);
+              const errorJson = JSON.parse(errorText);
+              errorMessage = errorJson.error || errorJson.message || errorMessage;
+            } else if (typeof error.error === 'string') {
+              const errorJson = JSON.parse(error.error);
+              errorMessage = errorJson.error || errorJson.message || errorMessage;
+            }
+          } catch (parseError) {
+            console.error('Error parsing error response:', parseError);
+          }
+        }
+        return throwError(() => new Error(errorMessage));
       })
     );
   }

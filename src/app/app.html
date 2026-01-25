@@ -55,6 +55,13 @@
               (selectedTabChange)="onTabChange($event)">
             </app-reply-drafts>
 
+            <app-voice-panel
+              [draftText]="currentDraft()?.body || ''"
+              (approve)="onApprove()"
+              (edit)="onEdit()"
+              (reject)="onReject()">
+            </app-voice-panel>
+
             <app-questions-card
               [questions]="generateResponse()!.questions_to_ask"
               [selectedDraftBody]="currentDraft()?.body || ''"
