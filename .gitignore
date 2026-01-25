@@ -2,6 +2,7 @@
 
 # Compiled output
 /dist
+!/dist/extension
 /tmp
 /out-tsc
 /bazel-out
