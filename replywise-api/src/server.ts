@@ -2,218 +2,260 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
+
 import { initializeGemini, callGemini } from './gemini';
 import { generatePrompt, rewritePrompt } from './prompts';
 import { analyzeRisk } from './risk';
+
 import {
   GenerateRequestSchema,
   RewriteRequestSchema,
-  GenerateResponseSchema,
-  RewriteResponseSchema,
-  GenerateRequest,
-  RewriteRequest,
   GenerateResponse,
-  RewriteResponse
+  RewriteResponse,
+  GenerateRequest,
+  RewriteRequest
 } from './schemas';
+
 import ttsRouter from './routes/tts';
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware
-app.use(helmet());
-app.use(cors({
-  origin: /localhost/,
-  credentials: true
-}));
+//////////////////////////////////////////////////
+// 🚨 VERY IMPORTANT
+// HEALTH MUST BE FIRST (prevents Render sleep)
+//////////////////////////////////////////////////
+
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+//////////////////////////////////////////////////
+// 🔐 CONFIG
+//////////////////////////////////////////////////
+
+const DAILY_GEMINI_LIMIT = Number(process.env.DAILY_GEMINI_LIMIT || 30);
+const DAILY_VOICE_LIMIT = Number(process.env.DAILY_VOICE_LIMIT || 5);
+const MONTHLY_GEMINI_CAP = Number(process.env.MONTHLY_GEMINI_CAP || 50000);
+
+//////////////////////////////////////////////////
+// 🔐 SIMPLE MEMORY TRACKERS
+//////////////////////////////////////////////////
+
+const dailyGeminiUsage = new Map<string, number>();
+const dailyVoiceUsage = new Map<string, number>();
+
+let monthlyGeminiCalls = 0;
+
+//////////////////////////////////////////////////
+// 🔄 RESET COUNTERS
+//////////////////////////////////////////////////
+
+setInterval(() => {
+  dailyGeminiUsage.clear();
+  dailyVoiceUsage.clear();
+  console.log('🔄 Daily quotas reset');
+}, 24 * 60 * 60 * 1000);
+
+setInterval(() => {
+  monthlyGeminiCalls = 0;
+  console.log('🔄 Monthly quota reset');
+}, 30 * 24 * 60 * 60 * 1000);
+
+//////////////////////////////////////////////////
+// 🔐 RATE LIMIT (anti spam)
+//////////////////////////////////////////////////
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: 'Too many requests. Slow down.' }
+});
+
+//////////////////////////////////////////////////
+// MIDDLEWARE (correct order)
+//////////////////////////////////////////////////
+
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(limiter);
 
-// Routes
-app.use('/api', ttsRouter);
+//////////////////////////////////////////////////
+// GEMINI INIT
+//////////////////////////////////////////////////
 
-// Initialize Gemini
-const geminiApiKey = process.env.GEMINI_API_KEY;
-if (!geminiApiKey || geminiApiKey === 'YOUR_KEY_HERE') {
-  console.warn('⚠️  WARNING: GEMINI_API_KEY not set or using placeholder. API will fail.');
-} else {
-  initializeGemini(geminiApiKey);
+if (process.env.GEMINI_API_KEY) {
+  initializeGemini(process.env.GEMINI_API_KEY);
   console.log('✅ Gemini initialized');
 }
 
-// Initialize ElevenLabs
-const elevenLabsApiKey = process.env.ELEVENLABS_API_KEY;
-if (!elevenLabsApiKey || elevenLabsApiKey === 'YOUR_KEY_HERE') {
-  console.warn('⚠️  WARNING: ELEVENLABS_API_KEY not set or using placeholder. TTS will fail.');
-} else {
-  console.log('✅ ElevenLabs initialized');
+//////////////////////////////////////////////////
+// HELPERS
+//////////////////////////////////////////////////
+
+function getUserId(req: Request) {
+  return req.ip || 'unknown';
 }
 
-// Error handling middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  console.error('Error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: err.message
-  });
-});
+function checkDaily(map: Map<string, number>, limit: number, userId: string) {
+  const count = map.get(userId) || 0;
+  if (count >= limit) return false;
+  map.set(userId, count + 1);
+  return true;
+}
 
-// Health check
-app.get('/health', (req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+//////////////////////////////////////////////////
+// 🔊 TTS ROUTE (voice quota protected)
+//////////////////////////////////////////////////
 
-// POST /api/generate
+app.use(
+  '/api/tts',
+  (req: Request, res: Response, next: NextFunction) => {
+    const userId = getUserId(req);
+
+    if (!checkDaily(dailyVoiceUsage, DAILY_VOICE_LIMIT, userId)) {
+      return res.status(429).json({ error: 'Daily voice quota reached' });
+    }
+
+    next();
+  },
+  ttsRouter
+);
+
+//////////////////////////////////////////////////
+// ✨ GENERATE
+//////////////////////////////////////////////////
+
 app.post('/api/generate', async (req: Request, res: Response) => {
   try {
-    // Validate request
-    const validatedData = GenerateRequestSchema.parse(req.body);
-    const { emailText, context } = validatedData as GenerateRequest;
+    const userId = getUserId(req);
 
-    // Analyze risk using heuristics
+    if (!checkDaily(dailyGeminiUsage, DAILY_GEMINI_LIMIT, userId)) {
+      return res.status(429).json({ error: 'Daily free quota reached' });
+    }
+
+    if (monthlyGeminiCalls >= MONTHLY_GEMINI_CAP) {
+      return res.status(503).json({
+        error: 'Service temporarily unavailable (monthly cap reached)'
+      });
+    }
+
+    monthlyGeminiCalls++;
+
+    const validated = GenerateRequestSchema.parse(req.body);
+    const { emailText, context } = validated as GenerateRequest;
+
     const heuristicRisk = analyzeRisk(emailText);
 
-    // Call Gemini
     const prompt = generatePrompt(emailText, context);
     const geminiResponse = await callGemini(prompt);
-    
-    // Parse Gemini response
-    let geminiData: any;
-    try {
-      geminiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      geminiData = JSON.parse(geminiResponse);
-    } catch (parseError) {
-      throw new Error(`Failed to parse Gemini response: ${parseError}`);
-    }
 
-    // Convert risk flags (arrays from both sources) to object format
-    const geminiFlagsArray = Array.isArray(geminiData.risk?.flags) 
-      ? geminiData.risk.flags 
+    const cleaned = geminiResponse
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '');
+
+    const geminiData = JSON.parse(cleaned);
+
+    const geminiFlags = Array.isArray(geminiData.risk?.flags)
+      ? geminiData.risk.flags
       : [];
-    const heuristicFlagsArray = heuristicRisk.flags;
-    const allFlags = [...new Set([...geminiFlagsArray, ...heuristicFlagsArray])];
-    
-    const riskFlagsObj = {
-      urgency: allFlags.includes('urgency'),
-      commitment: allFlags.includes('commitment'),
-      sensitive: allFlags.includes('sensitive'),
-      financial: allFlags.includes('financial')
-    };
-    
-    const mergedNotes = [
-      ...(geminiData.risk?.notes || []),
-      ...heuristicRisk.notes
-    ];
 
-    // Convert confidence from 0-1 to 0-100 scale
-    const geminiConfidence = (geminiData.risk?.confidence || 0) * 100;
-    const heuristicConfidence = heuristicRisk.confidence * 100;
-    const mergedConfidence = Math.max(geminiConfidence, heuristicConfidence);
+    const allFlags = [...new Set([...geminiFlags, ...heuristicRisk.flags])];
 
-    // Transform reply_drafts to match frontend format
-    const replyDrafts = geminiData.reply_drafts || {};
-    const transformedDrafts = [
-      {
-        style: 'short' as const,
-        subject: replyDrafts.short?.subject || 'Re: Email',
-        body: replyDrafts.short?.body || ''
-      },
-      {
-        style: 'friendly' as const,
-        subject: replyDrafts.friendly?.subject || 'Re: Email',
-        body: replyDrafts.friendly?.body || ''
-      },
-      {
-        style: 'formal' as const,
-        subject: replyDrafts.formal?.subject || 'Re: Email',
-        body: replyDrafts.formal?.body || ''
-      }
-    ];
+    const drafts = geminiData.reply_drafts || {};
 
-    // Build response
     const response: GenerateResponse = {
       intent_summary: geminiData.intent_summary || [],
-      reply_drafts: transformedDrafts,
+      reply_drafts: [
+        {
+          style: 'short',
+          subject: drafts.short?.subject || 'Re: Email',
+          body: drafts.short?.body || ''
+        },
+        {
+          style: 'friendly',
+          subject: drafts.friendly?.subject || 'Re: Email',
+          body: drafts.friendly?.body || ''
+        },
+        {
+          style: 'formal',
+          subject: drafts.formal?.subject || 'Re: Email',
+          body: drafts.formal?.body || ''
+        }
+      ],
       questions_to_ask: geminiData.questions_to_ask || [],
       risk: {
-        flags: riskFlagsObj,
-        notes: mergedNotes,
-        confidence: Math.min(Math.max(mergedConfidence, 0), 100) // Clamp 0-100
+        flags: {
+          urgency: allFlags.includes('urgency'),
+          commitment: allFlags.includes('commitment'),
+          sensitive: allFlags.includes('sensitive'),
+          financial: allFlags.includes('financial')
+        },
+        notes: geminiData.risk?.notes || [],
+        confidence: 80
       }
     };
 
-    // Validate response
-    GenerateResponseSchema.parse(response);
-
     res.json(response);
-  } catch (error: any) {
-    console.error('Generate error:', error);
-    
-    if (error.name === 'ZodError') {
-      res.status(400).json({
-        error: 'Validation error',
-        details: error.errors
-      });
-    } else {
-      res.status(500).json({
-        error: 'Failed to generate response',
-        message: error.message
-      });
-    }
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/rewrite
+//////////////////////////////////////////////////
+// ✏️ REWRITE
+//////////////////////////////////////////////////
+
 app.post('/api/rewrite', async (req: Request, res: Response) => {
   try {
-    // Validate request
-    const validatedData = RewriteRequestSchema.parse(req.body);
-    const { action, selectedDraftBody, originalEmail, context } = validatedData as RewriteRequest;
+    const validated = RewriteRequestSchema.parse(req.body);
+    const { action, selectedDraftBody, originalEmail, context } =
+      validated as RewriteRequest;
 
-    // Call Gemini
-    const prompt = rewritePrompt(action, selectedDraftBody, originalEmail, context);
+    const prompt = rewritePrompt(
+      action,
+      selectedDraftBody,
+      originalEmail,
+      context
+    );
+
     const geminiResponse = await callGemini(prompt);
-    
-    // Parse Gemini response
-    let geminiData: any;
-    try {
-      geminiResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '');
-      geminiData = JSON.parse(geminiResponse);
-    } catch (parseError) {
-      throw new Error(`Failed to parse Gemini response: ${parseError}`);
-    }
 
-    // Build response
+    const cleaned = geminiResponse
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '');
+
+    const geminiData = JSON.parse(cleaned);
+
     const response: RewriteResponse = {
       subject: geminiData.subject,
-      body: geminiData.body || selectedDraftBody
+      body: geminiData.body
     };
 
-    // Validate response
-    RewriteResponseSchema.parse(response);
-
     res.json(response);
-  } catch (error: any) {
-    console.error('Rewrite error:', error);
-    
-    if (error.name === 'ZodError') {
-      res.status(400).json({
-        error: 'Validation error',
-        details: error.errors
-      });
-    } else {
-      res.status(500).json({
-        error: 'Failed to rewrite',
-        message: error.message
-      });
-    }
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Start server
+//////////////////////////////////////////////////
+// ERROR HANDLER
+//////////////////////////////////////////////////
+
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled:', err);
+  res.status(500).json({ error: err.message });
+});
+
+//////////////////////////////////////////////////
+// START
+//////////////////////////////////////////////////
+
 app.listen(PORT, () => {
-  console.log(`🚀 ReplyWise API server running on http://localhost:${PORT}`);
-  console.log(`📡 CORS enabled for http://localhost:4200`);
+  console.log(`🚀 ReplyWise API running on port ${PORT}`);
 });

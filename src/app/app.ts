@@ -1,5 +1,7 @@
-import { Component, signal, computed } from '@angular/core';
+import { Component, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterModule, ActivatedRoute } from '@angular/router';
+
 import { HeaderComponent } from './components/header/header.component';
 import { EmailInputComponent } from './components/email-input/email-input.component';
 import { IntentSummaryCardComponent } from './components/intent-summary-card/intent-summary-card.component';
@@ -10,9 +12,11 @@ import { ApprovalBarComponent } from './components/approval-bar/approval-bar.com
 import { FooterComponent } from './components/footer/footer.component';
 import { AboutPageComponent } from './components/about-page/about-page.component';
 import { VoicePanelComponent } from './components/voice-panel/voice-panel.component';
+
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+
 import { ReplywiseApiService } from './services/replywise-api.service';
 import { GenerateResponse, ReplyDraft } from './models/replywise.models';
 import { fadeIn, slideIn } from './app.animations';
@@ -22,6 +26,8 @@ import { fadeIn, slideIn } from './app.animations';
   standalone: true,
   imports: [
     CommonModule,
+    RouterModule, // ⭐ required for ActivatedRoute
+
     HeaderComponent,
     EmailInputComponent,
     IntentSummaryCardComponent,
@@ -32,6 +38,7 @@ import { fadeIn, slideIn } from './app.animations';
     FooterComponent,
     AboutPageComponent,
     VoicePanelComponent,
+
     MatProgressBarModule,
     MatCardModule,
     MatSnackBarModule
@@ -40,8 +47,12 @@ import { fadeIn, slideIn } from './app.animations';
   styleUrl: './app.scss',
   animations: [fadeIn, slideIn]
 })
-export class App {
-  // State
+export class App implements OnInit {
+
+  /////////////////////////////////////////////////
+  // STATE
+  /////////////////////////////////////////////////
+
   emailText = signal<string>('');
   context = signal<string>('');
   loading = signal<boolean>(false);
@@ -50,15 +61,45 @@ export class App {
   toEmail = signal<string>('');
   showAboutPage = signal<boolean>(false);
 
-  // Computed
+  /////////////////////////////////////////////////
+  // COMPUTED
+  /////////////////////////////////////////////////
+
   hasResults = computed(() => this.generateResponse() !== null);
+
   currentDraft = computed(() => {
     const response = this.generateResponse();
     if (!response) return null;
     return response.reply_drafts[this.selectedDraftIndex()];
   });
 
-  constructor(public apiService: ReplywiseApiService, private snackBar: MatSnackBar) {}
+  /////////////////////////////////////////////////
+  // CONSTRUCTOR
+  /////////////////////////////////////////////////
+
+  constructor(
+    public apiService: ReplywiseApiService,
+    private snackBar: MatSnackBar,
+    private route: ActivatedRoute
+  ) {}
+
+  /////////////////////////////////////////////////
+  // AUTO-FILL EMAIL FROM GMAIL (?email=)
+  /////////////////////////////////////////////////
+
+  ngOnInit(): void {
+    this.route.queryParams.subscribe(params => {
+      if (params['email']) {
+        const decoded = decodeURIComponent(params['email']);
+        this.emailText.set(decoded);
+        console.log('Email loaded from Gmail:', decoded.slice(0, 50));
+      }
+    });
+  }
+
+  /////////////////////////////////////////////////
+  // UI HANDLERS (UNCHANGED LOGIC)
+  /////////////////////////////////////////////////
 
   get demoMode(): boolean {
     return this.apiService.demoMode();
@@ -80,10 +121,15 @@ export class App {
     this.emailText.set(this.apiService.SAMPLE_EMAIL);
   }
 
+  /////////////////////////////////////////////////
+  // GENERATE
+  /////////////////////////////////////////////////
+
   onGenerate(): void {
     if (!this.emailText()) return;
 
     this.loading.set(true);
+
     this.apiService.generate({
       emailText: this.emailText(),
       context: this.context()
@@ -92,18 +138,18 @@ export class App {
         this.generateResponse.set(response);
         this.loading.set(false);
       },
-      error: (error) => {
-        console.error('Generate error:', error);
+      error: () => {
         this.loading.set(false);
-        const errorMessage = error?.error?.message || error?.message || 'Failed to connect to backend. Make sure the API server is running on port 8080.';
-        this.snackBar.open(`Error: ${errorMessage}`, 'Close', {
-          duration: 5000,
-          horizontalPosition: 'end',
-          panelClass: ['error-snackbar']
+        this.snackBar.open('Failed to connect to backend', 'Close', {
+          duration: 4000
         });
       }
     });
   }
+
+  /////////////////////////////////////////////////
+  // DRAFT UPDATE
+  /////////////////////////////////////////////////
 
   onDraftUpdate(event: { index: number; draft: ReplyDraft }): void {
     const response = this.generateResponse();
@@ -111,7 +157,7 @@ export class App {
 
     const updatedDrafts = [...response.reply_drafts];
     updatedDrafts[event.index] = event.draft;
-    
+
     this.generateResponse.set({
       ...response,
       reply_drafts: updatedDrafts
@@ -122,11 +168,16 @@ export class App {
     this.selectedDraftIndex.set(index);
   }
 
+  /////////////////////////////////////////////////
+  // REWRITE
+  /////////////////////////////////////////////////
+
   onRewriteRequest(event: { action: 'shorter' | 'more_formal' | 'regenerate'; draftIndex: number }): void {
     const response = this.generateResponse();
     if (!response) return;
 
     const draft = response.reply_drafts[event.draftIndex];
+
     this.loading.set(true);
 
     this.apiService.rewrite({
@@ -137,6 +188,7 @@ export class App {
     }).subscribe({
       next: (rewriteResponse) => {
         const updatedDrafts = [...response.reply_drafts];
+
         updatedDrafts[event.draftIndex] = {
           ...draft,
           subject: rewriteResponse.subject,
@@ -147,20 +199,18 @@ export class App {
           ...response,
           reply_drafts: updatedDrafts
         });
+
         this.loading.set(false);
       },
-      error: (error) => {
-        console.error('Rewrite error:', error);
+      error: () => {
         this.loading.set(false);
-        const errorMessage = error?.error?.message || error?.message || 'Failed to rewrite. Make sure the API server is running.';
-        this.snackBar.open(`Error: ${errorMessage}`, 'Close', {
-          duration: 5000,
-          horizontalPosition: 'end',
-          panelClass: ['error-snackbar']
-        });
       }
     });
   }
+
+  /////////////////////////////////////////////////
+  // QUESTIONS
+  /////////////////////////////////////////////////
 
   onQuestionsInserted(questions: string[]): void {
     const response = this.generateResponse();
@@ -168,9 +218,12 @@ export class App {
 
     const draftIndex = this.selectedDraftIndex();
     const draft = response.reply_drafts[draftIndex];
-    const questionsText = '\n\nQuestions:\n' + questions.map(q => `- ${q}`).join('\n');
-    
+
+    const questionsText =
+      '\n\nQuestions:\n' + questions.map(q => `- ${q}`).join('\n');
+
     const updatedDrafts = [...response.reply_drafts];
+
     updatedDrafts[draftIndex] = {
       ...draft,
       body: draft.body + questionsText
@@ -182,35 +235,36 @@ export class App {
     });
   }
 
+  /////////////////////////////////////////////////
+  // EMAIL + COPY (required by template)
+  /////////////////////////////////////////////////
+
   onToEmailChange(email: string): void {
     this.toEmail.set(email);
   }
 
-  onApprove(): void {
-    // Handled by ApprovalBarComponent
+  onCopy(): void {
+    const draft = this.currentDraft();
+    if (!draft) return;
+
+    navigator.clipboard.writeText(draft.body);
+    this.snackBar.open('Copied!', 'OK', { duration: 1500 });
   }
 
+  /////////////////////////////////////////////////
+  // APPROVAL ACTIONS
+  /////////////////////////////////////////////////
+
+  onApprove(): void {}
+
   onEdit(): void {
-    // Switch to the reply drafts tab to allow editing
     this.selectedDraftIndex.set(0);
-    // Could also scroll to the drafts section or show a message
-    this.snackBar.open('You can now edit the reply in the drafts section above.', 'Got it', {
-      duration: 3000
-    });
   }
 
   onReject(): void {
-    // Reset the results and go back to input
     this.generateResponse.set(null);
     this.emailText.set('');
     this.context.set('');
     this.selectedDraftIndex.set(0);
-    this.snackBar.open('Reply rejected. You can generate a new response.', 'Got it', {
-      duration: 3000
-    });
-  }
-
-  onCopy(): void {
-    // Handled by ApprovalBarComponent
   }
 }
